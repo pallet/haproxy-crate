@@ -1,23 +1,22 @@
 # Release notes
 
+## haproxy-0.6.0
+
 - Make sure the crate is idempotent. Allow options.
 
 - Make Haproxy enable the 'epel' repo when installing.
 
-
 ## pallet-crates-0.5.0
-
 
 ## pallet-crates-0.4.4
 
 - Update for repository management in separate namespaces
 
-
 ## pallet-crates-0.4.3
 
 - Update for 0.5.0-SNAPSHOT
   Change pallet.resource.* to pallet.action.*. Change stevedore calls to
-  script functions to use unquote and the pallet.script.lib namespace. 
+  script functions to use unquote and the pallet.script.lib namespace.
   Change request to session.  Change build-resources to build-actions.
 
 
