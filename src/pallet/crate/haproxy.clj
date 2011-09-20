@@ -47,7 +47,7 @@
       (when->
        (#{:amzn-linux :centos} (session/os-family session))
        (epel/add-epel :version "5-4"))
-      (package/package "haproxy")))
+      (package/package "haproxy" :enable ["epel"])))
 
 (defmulti format-kv (fn format-kv-dispatch [k v & _] (class v)))
 
@@ -110,6 +110,7 @@
         group-name (keyword (session/group-name session))
         srv-apps (-?> session :parameters :haproxy group-name)
         app-keys (keys srv-apps)
+        srv-apps (zipmap app-keys (->> srv-apps vals (map distinct)))
         unconfigured (clojure.set/difference (set app-keys) (set apps))
         no-nodes (clojure.set/difference (set app-keys) (set apps))]
     (when (seq unconfigured)
@@ -181,9 +182,9 @@
       (conj
        (or v [])
        (merge
-        options
         {:ip (session/target-ip session)
-         :name (session/safe-name session)}))))))
+         :name (session/safe-name session)}
+        options))))))
 
 #_
 (pallet.core/defnode haproxy
