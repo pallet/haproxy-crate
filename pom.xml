@@ -15,6 +15,14 @@
     <url>https://github.com/pallet/haproxy-crate</url>
   </scm>
 
+  <dependencies>
+    <dependency>
+      <groupId>org.clojure</groupId>
+      <artifactId>core.incubator</artifactId>
+      <version>0.1.0</version>
+    </dependency>
+  </dependencies>
+
   <!-- make sure we can find the parent pom -->
   <repositories>
     <repository>
