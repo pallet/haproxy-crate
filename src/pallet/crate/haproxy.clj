@@ -10,11 +10,11 @@
    [pallet.action.package.epel :as epel]
    [pallet.action.remote-file :as remote-file]
    [pallet.crate.etc-default :as etc-default]
-   [clojure.contrib.logging :as logging]
+   [clojure.tools.logging :as logging]
    [clojure.string :as string]
    clojure.set)
   (:use
-   [clojure.contrib.core :only [-?>]]
+   [clojure.core.incubator :only [-?>]]
    pallet.thread-expr))
 
 (def conf-path "/etc/haproxy/haproxy.cfg")
@@ -42,7 +42,7 @@
 (defn install-package
   "Install HAProxy from packages"
   [session]
-  (logging/debug (format "INSTALL-HAPROXY %s" (session/os-family session)))
+  (logging/debugf "INSTALL-HAPROXY %s" (session/os-family session))
   (-> session
       (when->
        (#{:amzn-linux :centos} (session/os-family session))
@@ -115,16 +115,11 @@
         no-nodes (clojure.set/difference (set app-keys) (set apps))]
     (when (seq unconfigured)
       (doseq [app unconfigured]
-        (logging/warn
-         (format
-          "Unconfigured proxy %s %s"
-          group-name app))))
+        (logging/warnf "Unconfigured proxy %s %s" group-name app)))
     (when (seq no-nodes)
       (doseq [app no-nodes]
-        (logging/warn
-         (format
-          "Configured proxy %s %s with no servers"
-          group-name app))))
+        (logging/warnf
+         "Configured proxy %s %s with no servers" group-name app)))
     (reduce
      #(update-in %1 [:listen (keyword (first %2)) :server]
                  (fn [servers]
