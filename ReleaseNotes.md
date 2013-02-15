@@ -1,5 +1,11 @@
 # Release notes
 
+## haproxy-0.7.0
+
+- Fix for clojure 1.3 compatibility
+
+- Update for pallet 0.7.0
+
 ## haproxy-0.6.0
 
 - Make sure the crate is idempotent. Allow options.
