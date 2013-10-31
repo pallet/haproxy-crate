@@ -78,11 +78,15 @@
          {:server {:image {:os-family :ubuntu}
                    :group-name :tag
                    :node (test-utils/make-node
-                          "tag" :public-ips ["1.2.3.4"])}}
+                          "tag" :public-ips ["1.2.3.4"])}
+          :phase-context "configure"}
          (remote-file
           "/etc/haproxy/haproxy.cfg"
-          :content "global\nlog 127.0.0.1 local0\nlog 127.0.0.1 local1 notice\nmaxconn 4096\nuser haproxy\ngroup haproxy\ndaemon\ndefaults\nmode http\nlisten app 0.0.0.0:80\nserver h1 1.2.3.4:80 weight 1 maxconn 50 check\nserver h2 1.2.3.5:80 weight 1 maxconn 50 check\n"
-          :literal true)
+          :content "global\ngroup haproxy\nmaxconn 4096\nlog 127.0.0.1 local0\nlog 127.0.0.1 local1 notice\ndaemon\nuser haproxy\ndefaults\nclitimeout 50000\nretries 3\nmaxconn 2000\nlog global\nsrvtimeout 50000\ncontimeout 5000\nmode http\noption httplog\noption dontlognull\noption redispatch\nlisten app 0.0.0.0:80\nserver h1 1.2.3.4:80 weight 1 maxconn 50 check\nserver h2 1.2.3.5:80 weight 1 maxconn 50 check\n"
+          :literal true
+          :owner "haproxy"
+          :group "haproxy"
+          :flag-on-changed haproxy/config-changed-flag)
          (etc-default/write "haproxy" :ENABLED 1)))
        (first
         (build-actions
@@ -90,27 +94,30 @@
                    :group-name :tag
                    :node (test-utils/make-node
                           "tag" :public-ips ["1.2.3.4"])}}
-         (haproxy/configure
-          :listen {:app
-                   {:server-address "0.0.0.0:80"
-                    :server ["h1 1.2.3.4:80 weight 1 maxconn 50 check"
-                             "h2 1.2.3.5:80 weight 1 maxconn 50 check"]}}
-          :defaults {:mode "http"}))))))
+         (haproxy/settings
+          {:config
+           {:listen {:app
+                     {:server-address "0.0.0.0:80"
+                      :server ["h1 1.2.3.4:80 weight 1 maxconn 50 check"
+                               "h2 1.2.3.5:80 weight 1 maxconn 50 check"]}}
+            :defaults {:mode "http"}}})
+         (haproxy/configure {}))))))
 
 (deftest invocation-test
   (let [node (test-utils/make-node "tag" :ip "1.2.3.4")]
     (is (build-actions
-            {:server {:image {:os-family :ubuntu}
-                      :group-name :tag :node node
-                      :node-id (keyword (id node))}}
-          (haproxy/settings
+         {:server {:image {:os-family :ubuntu}
+                   :group-name :tag :node node
+                   :node-id (keyword (id node))}}
+         (haproxy/settings
+          {:config
            {:listen {:app
                      {:server-address "0.0.0.0:80"
                       :server ["h1 1.2.3.4:80 weight 1 maxconn 50 check"
-                               "h2 1.2.3.5:80 weight 1 maxconn 50 check"]}}})
-          (haproxy/install {})
-          (haproxy/proxied-by :tag :app)
-          (haproxy/configure {})))))
+                               "h2 1.2.3.5:80 weight 1 maxconn 50 check"]}}}})
+         (haproxy/install {})
+         (haproxy/proxied-by :tag :app {})
+         (haproxy/configure {})))))
 
 (def test-spec
   (server-spec
