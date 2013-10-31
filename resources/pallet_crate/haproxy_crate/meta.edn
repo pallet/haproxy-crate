@@ -1,0 +1,11 @@
+{:header "haproxy"
+ :title
+ "A [pallet](http://palletops.com/) crate to install and configure
+ [haproxy](http://haproxy.1wt.eu/)."
+ :git-repo "https://github.com/pallet/haproxy-crate"
+ :api-docs "http://palletops.com/haproxy-crate/0.8/api"
+ :annotated-docs "http://palletops.com/haproxy-crate/0.8/annotated/uberdoc.html"
+ :tag-prefix ""
+ :artifact-id "haproxy-crate"
+ :source-path "src/pallet/crate/haproxy.clj"
+ :versions [{:pallet "0.8.0-RC.4" :version "0.8.0-alpha.1"}]}

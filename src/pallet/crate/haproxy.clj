@@ -1,26 +1,29 @@
 (ns pallet.crate.haproxy
   "HA Proxy installation and configuration"
   (:require
-   [pallet.argument :as argument]
-   [pallet.compute :as compute]
-   [pallet.parameter :as parameter]
-   [pallet.session :as session]
-   [pallet.action :as action]
-   [pallet.action.package :as package]
-   [pallet.action.package.epel :as epel]
-   [pallet.action.remote-file :as remote-file]
-   [pallet.crate.etc-default :as etc-default]
-   [clojure.tools.logging :as logging]
+   [clojure.set :refer [difference]]
    [clojure.string :as string]
-   clojure.set)
-  (:use
-   [clojure.core.incubator :only [-?>]]
-   pallet.thread-expr))
+   [clojure.tools.logging :refer [debugf warnf]]
+   [pallet.actions :refer [remote-file]]
+   [pallet.api :as api :refer [plan-fn]]
+   [pallet.compute :as compute]
+   [pallet.crate
+    :refer [assoc-settings defplan get-node-settings get-settings
+            group-name target-node target targets update-settings
+            service-phases]]
+   [pallet.crate-install :as crate-install]
+   [pallet.crate.etc-default :as etc-default]
+   [pallet.crate.initd :as initd]
+   [pallet.crate.service :as service]
+   [pallet.node :refer [hostname id primary-ip private-ip]]
+   [pallet.utils :refer [apply-map base64-md5 deep-merge]]
+   [pallet.version-dispatch
+    :refer [defmethod-version-plan defmulti-version-plan]]))
 
-(def conf-path "/etc/haproxy/haproxy.cfg")
+;;; # Settings
 
-(def haproxy-user "haproxy")
-(def haproxy-group "haproxy")
+(def config-changed-flag "HAPROXY-CONFIG-CHANGED")
+(def facility :haproxy)
 
 (def default-global
   {:log ["127.0.0.1 local0" "127.0.0.1 local1 notice"]
@@ -39,16 +42,49 @@
    :clitimeout 50000
    :srvtimeout 50000})
 
-(defn install-package
-  "Install HAProxy from packages"
-  [session]
-  (logging/debugf "INSTALL-HAPROXY %s" (session/os-family session))
-  (-> session
-      (when->
-       (#{:amzn-linux :centos} (session/os-family session))
-       (epel/add-epel :version "5-4"))
-      (package/package "haproxy" :enable ["epel"])))
+(defmulti-version-plan default-settings [version])
 
+;; By default, install from system packages
+(defmethod-version-plan default-settings {:os :linux}
+  [os os-version version]
+  {:config {:global  default-global
+            :defaults default-defaults}
+   :conf-file "/etc/haproxy/haproxy.cfg"
+   :user "haproxy"
+   :group "haproxy"
+   :service-name "haproxy"
+   :supervisor :initd
+   :install-strategy :packages
+   :packages ["haproxy"]
+   :package-options {:disable-service-start true}})
+
+(defplan settings
+  "Build the configuration settings by merging the user supplied ones
+  with the OS-related install settings and the default config settings
+  for HAProxy.
+
+  Configuration is via the `:config` map.  `:global` and `:defaults`
+  both take maps of keyword value pairs.  `:listen` takes a map where
+  the keys are of the form \"name\" and contain a `:server-address`
+  key with a string containing \"ip:port\", and other
+  keyword/value. Servers for each listen section can be declared with
+  the proxied-by function."
+  [{:keys [instance-id version config] :as settings}]
+  (let [settings (deep-merge
+                  {:version (or version :latest)
+                   :proxy-group (keyword (group-name))}
+                  (default-settings :latest)
+                  (dissoc settings :instance-id))]
+    (debugf "haproxy settings %s" settings)
+    (assoc-settings facility settings {:instance-id instance-id})))
+
+;;; # Install
+
+(defplan install
+  [{:keys [instance-id]}]
+  (crate-install/install facility instance-id))
+
+;;; # Configure
 (defmulti format-kv (fn format-kv-dispatch [k v & _] (class v)))
 
 (defmethod format-kv :default
@@ -88,104 +124,136 @@
 
 (defn- config-server
   "Format a server configuration line"
-  [m]
-  {:pre [(:name m) (:ip m)]}
+  [{:keys [ip server-port] :as config}]
+  {:pre [(:name config) ip]}
   (format
    "%s %s%s %s"
-   (name (:name m))
-   (:ip m)
-   (if-let [p (:server-port m)] (str ":" p) "")
+   (name (:name config))
+   ip
+   (if server-port (str ":" server-port) "")
    (apply
     str
-    (for [[k v] (dissoc m :server-port :ip :name)]
+    (for [[k v] (dissoc config :server-port :ip :name)]
       (format-kv k v " ")))))
 
-(defn merge-servers
-  [session options]
-  (let [options (update-in
-                 options [:listen]
-                 (fn [m]
-                   (zipmap (map keyword (keys m)) (vals m))))
-        apps (map keyword (keys (:listen options)))
-        group-name (keyword (session/group-name session))
-        srv-apps (-?> session :parameters :haproxy group-name)
-        app-keys (keys srv-apps)
-        srv-apps (zipmap app-keys (->> srv-apps vals (map distinct)))
-        unconfigured (clojure.set/difference (set app-keys) (set apps))
-        no-nodes (clojure.set/difference (set app-keys) (set apps))]
-    (when (seq unconfigured)
-      (doseq [app unconfigured]
-        (logging/warnf "Unconfigured proxy %s %s" group-name app)))
-    (when (seq no-nodes)
-      (doseq [app no-nodes]
-        (logging/warnf
-         "Configured proxy %s %s with no servers" group-name app)))
+(defn proxied-map
+  "Build a map from app to sequence of proxied configuration for the given
+  haproxy group."
+  [haproxy-group]
+  (reduce
+   (fn [m target]
+     (debugf "proxied-map %s %s"
+             (get-node-settings (:node target) facility)
+             haproxy-group)
+     (if-let [proxied (-> (get-node-settings (:node target) facility)
+                            haproxy-group)]
+       (reduce
+        (fn [m [app config]]
+          (update-in m [app] (fnil conj []) config))
+        m proxied)
+       m))
+   {} (targets)))
+
+(defn server-listen
+  "Build a map for the listen configuration of haproxy"
+  [group-name listen proxied-config]
+  {:pre [(keyword? group-name) (map? listen) (map? proxied-config)]}
+  (let [apps (map keyword (keys listen))
+        listen (zipmap apps (vals listen))
+        app-keys (keys proxied-config)
+        unconfigured (difference (set app-keys) (set apps))
+        no-nodes (difference (set app-keys) (set apps))]
+    (doseq [app unconfigured]
+      (warnf "Unconfigured proxy %s %s" group-name app))
+    (doseq [app no-nodes]
+      (warnf "Configured proxy %s %s with no servers" group-name app))
     (reduce
-     #(update-in %1 [:listen (keyword (first %2)) :server]
-                 (fn [servers]
-                   (concat
-                    (or servers [])
-                    (map config-server (second %2)))))
-     options
-     srv-apps)))
+     (fn [listen [app app-servers]]
+       (update-in listen [app :server]
+                  (fn [servers]
+                    (concat servers (map config-server app-servers)))))
+     listen
+     proxied-config)))
 
-(defn configure
-  "Configure HAProxy.
-   :global and :defaults both take maps of keyword value pairs. :listen takes a
-   map where the keys are of the form \"name\" and contain an :server-address
-   key with a string containing ip:port, and other keyword/value. Servers for
-   each listen section can be declared with the proxied-by function."
-  [session
-   & {:keys [global defaults listen frontend backend]
-              :as options}]
-  (->
-   session
-   (remote-file/remote-file
-    conf-path
-    :content (argument/delayed
-              [session]
-              (let [combined (merge
-                              {:global default-global
-                               :defaults default-defaults}
-                              (merge-servers session options))]
-                (string/join
-                 (map
-                  config-section
-                  (map
-                   (juxt identity combined)
-                   (filter
-                    combined
-                    [:global :defaults :listen :frontend :backend]))))))
-    :literal true)
-   (etc-default/write "haproxy" :ENABLED 1)))
+(defn config-file
+  "Returns a string containing the configuration file contents."
+  [group-name config]
+  (let [config (update-in
+                config [:listen]
+                #(server-listen group-name % (proxied-map group-name)))]
+    (debugf "proxied-map %s" (proxied-map group-name))
+    (debugf "config %s" config)
+    (->>
+     (filter config [:global :defaults :listen :frontend :backend])
+     (map (juxt identity config))
+     (map config-section)
+     string/join)))
 
+(defplan configure
+  "Configure HAProxy."
+  [{:keys [instance-id] :as options}]
+  (let [{:keys [conf-file config group proxy-group user]}
+        (get-settings facility {:instance-id instance-id})]
+    (remote-file
+     conf-file
+     :content (config-file proxy-group config)
+     :literal true :owner user :group group
+     :flag-on-changed config-changed-flag)
+    (etc-default/write "haproxy" :ENABLED 1)))
+
+(defn target-name [{:keys [node]}]
+  ((some-fn hostname (comp base64-md5 id)) node))
+
+(defn target-ip [{:keys [node]}]
+  ((some-fn private-ip primary-ip) node))
+
+(defn target-config-map
+  [target config]
+  (merge
+   {:name (target-name target)
+    :ip (target-ip target)}
+   config))
 
 (defn proxied-by
-  "Declare that a node is proxied by the given haproxy server.
+  "Declare that a node is proxied by the given haproxy server.  This
+  should be called in a phase that runs before :configure (such as
+  :settings).
 
-   (proxied-by session :haproxy :app1 :check true)."
-  [session proxy-group-name proxy-group
-   & {:keys [server-port addr backup check cookie disabled fall id
-             inter fastinter downinter maxqueue minconn port redir
-             rise slowstart source track weight]
-      :as options}]
-  (->
-   session
-   (parameter/update-for
-    [:haproxy (keyword proxy-group-name) (keyword proxy-group)]
-    (fn [v]
-      (conj
-       (or v [])
-       (merge
-        {:ip (session/target-ip session)
-         :name (session/safe-name session)}
-        options))))))
+      (proxied-by :haproxy :app1 {:check true})."
+  [proxy-group-name app-group
+   {:keys [server-port addr backup check cookie disabled fall id
+           inter fastinter downinter maxqueue minconn port redir
+           rise slowstart source track weight]
+    :as config}
+   & {:keys [instance-id] :as options}]
+  {:pre [(keyword? app-group)]}
+  (update-settings
+   facility options assoc-in [(keyword proxy-group-name) app-group]
+   (target-config-map (target) config)))
 
-#_
-(pallet.core/defnode haproxy
-  {}
-  :bootstrap (pallet.phase/phase-fn
-              (pallet.crate.automated-admin-user/automated-admin-user))
-  :configure (pallet.phase/phase-fn
-              (pallet.crate.haproxy/install-package)
-              (pallet.crate.haproxy/configure)))
+(defplan service
+  [& {:keys [instance-id] :as options}]
+  (let [{:keys [supervision-options] :as settings}
+        (get-settings facility {:instance-id instance-id})]
+    (service/service settings (merge supervision-options
+                                     (dissoc options :instance-id)))))
+
+(defplan ensure-service
+  [& {:keys [instance-id] :as options}]
+  (service :instance-id instance-id :if-flag config-changed-flag)
+  (service :instance-id instance-id :if-stopped true))
+
+(defn server-spec
+  [{:keys [instance-id] :as settings}]
+  (let [options (select-keys settings [:instance-id])]
+    (api/server-spec
+     :phases (merge
+              {:settings (plan-fn
+                          (pallet.crate.haproxy/settings settings))
+               :install (plan-fn (install options))
+               :configure (plan-fn (configure options))
+               :ensure-service (plan-fn (apply-map ensure-service options))}
+              (service-phases facility options service))
+     :default-phases [:install :configure :ensure-service]
+     :roles (when-let [proxy-group (:proxy-group settings)]
+              #{proxy-group}))))

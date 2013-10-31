@@ -1,5 +1,11 @@
 # Release notes
 
+## haproxy-0.8.0-alpha.1
+
+- Update for pallet 0.8.0-RC.4
+
+- Use settings phase
+
 ## haproxy-0.7.0
 
 - Fix for clojure 1.3 compatibility
@@ -72,4 +78,3 @@
 - enable haproxy in /etc/defaults
 
 - add haproxy crate
-
