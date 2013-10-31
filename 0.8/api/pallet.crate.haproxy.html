@@ -1,0 +1,124 @@
+<html lang="en">
+  <head>
+    <title>pallet.crate.haproxy documentation</title>
+    <link href="css/default.css" type="text/css" rel="stylesheet" />
+    <link href="css/codox-md.css" type="text/css" rel="stylesheet" />
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="js/page_effects.js"></script>
+  </head>
+  <body>
+    <header>
+    <div data-scrollspy="scrollspy" class="topbar">
+      <div class="topbar-inner">
+        <div class="container">
+          <a href="/" class="brand">Pallet</a>
+          <ul class="nav">
+            <li class=""><a href="/doc">Documentation</a></li>
+            <li class=""><a href="/news">News</a></li>
+            <li class=""><a href="/blog">Blog</a></li>
+            <li class=""><a href="https://github.com/pallet/pallet">Code</a></li>
+            <li class=""><a href="/services">Services</a></li>
+            <li class=""><a href="/support">Support</a></li>
+            <li class=""><a href="/contact">Contact</a></li>
+          </ul>
+          <form action="http://www.google.com/search" method="get" class="pull-right">
+            <input placeholder="Search" value="" maxlength="255" name="q" type="text" />
+            <input value="palletops.com" type="hidden" name="sitesearch" />
+          </form>
+        </div>
+      </div>
+    </div>
+      <div id="header">
+        <h1><a href="http://palletops.com"><span class="project-title">Haproxy-crate 0.8.0-SNAPSHOT API documentation</span></a></h1>
+      </div>
+    </header>
+    <navigation>
+      <div id="namespaces" class="sidebar">
+        <h3>Namespaces</h3>
+        <ul class="ns-links">
+          <li class="ns-list"><a class="ns-link ns-name" href="pallet.crate.haproxy.html">pallet.crate.haproxy</a></li>
+        </ul>
+      </div>
+      <div id="vars" class="sidebar">
+        <h3>Public Vars</h3>
+        <ul class="ns-var-links">
+          <li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-config-file">config-file</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-configure">configure</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-proxied-by">proxied-by</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-proxied-map">proxied-map</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-server-listen">server-listen</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.crate.haproxy.html#var-settings">settings</a></li>
+        </ul>
+      </div>
+    </navigation>
+    <article>
+      <div id="content" class="namespace-docs">
+        <h2 class="namespace-title">pallet.crate.haproxy documentation</h2>
+        <div class="doc"><p>HA Proxy installation and configuration</p>
+</div>
+        <div class="ns-vars">
+          <div class="public">
+            <h3><a id="var-config-file" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L178">config-file</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[group-name config]</div>
+            
+            
+            <div class="doc"><p>Returns a string containing the configuration file contents.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-configure" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L192">configure</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[{:keys [instance-id], :as options}]</div>
+            
+            
+            <div class="doc"><p>Configure HAProxy.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-proxied-by" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L217">proxied-by</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[proxy-group-name app-group {:keys [server-port addr backup check cookie disabled fall id inter fastinter downinter maxqueue minconn port redir rise slowstart source track weight], :as config} &amp; {:keys [instance-id], :as options}]</div>
+            
+            
+            <div class="doc"><p>Declare that a node is proxied by the given haproxy server.  This
+should be called in a phase that runs before :configure (such as
+:settings).</p>
+
+<pre><code>(proxied-by :haproxy :app1 {:check true}).
+</code></pre>
+</div>
+          </div><div class="public">
+            <h3><a id="var-proxied-map" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L139">proxied-map</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[haproxy-group]</div>
+            
+            
+            <div class="doc"><p>Build a map from app to sequence of proxied configuration for the given
+haproxy group.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-server-listen" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L157">server-listen</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[group-name listen proxied-config]</div>
+            
+            
+            <div class="doc"><p>Build a map for the listen configuration of haproxy</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-settings" class="source var-name" href="https://github.com/pallet/haproxy-crate/blob/develop/src/pallet/crate/haproxy.clj#L61">settings</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[{:keys [instance-id version config], :as settings}]</div>
+            
+            
+            <div class="doc"><p>Build the configuration settings by merging the user supplied ones
+with the OS-related install settings and the default config settings
+for HAProxy.</p>
+
+<p>Configuration is via the <code>:config</code> map.  <code>:global</code> and <code>:defaults</code>
+both take maps of keyword value pairs.  <code>:listen</code> takes a map where
+the keys are of the form "name" and contain a <code>:server-address</code>
+key with a string containing "ip:port", and other
+keyword/value. Servers for each listen section can be declared with
+the proxied-by function.</p>
+</div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </body>
+
+</html>
