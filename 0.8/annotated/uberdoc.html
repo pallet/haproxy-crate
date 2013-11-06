@@ -3028,8 +3028,8 @@ net.brehaut.ClojureTools = (function (SH) {
     build_tree: build_tree
   };
 })(SyntaxHighlighter);
-</script><title>com.palletops/haproxy-crate -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">com.palletops/haproxy-crate</h1><h2 class="project-version">0.8.0-SNAPSHOT</h2><br /><p>Crate for haproxy installation</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.4.0</td></tr><tr><td class="dep-name">com.palletops/pallet</td><td class="dotted"><hr /></td><td class="dep-version">0.8.0-SNAPSHOT</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#pallet.crate.haproxy">pallet.crate.haproxy</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#pallet.crate.haproxy" name="pallet.crate.haproxy"><h1 class="project-name">pallet.crate.haproxy</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>HA Proxy installation and configuration</p>
+</script><title>com.palletops/haproxy-crate -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">com.palletops/haproxy-crate</h1><h2 class="project-version">0.8.0-alpha.2</h2><br /><p>Crate for haproxy installation</p>
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.4.0</td></tr><tr><td class="dep-name">com.palletops/pallet</td><td class="dotted"><hr /></td><td class="dep-version">0.8.0-RC.4</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#pallet.crate.haproxy">pallet.crate.haproxy</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#pallet.crate.haproxy" name="pallet.crate.haproxy"><h1 class="project-name">pallet.crate.haproxy</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>HA Proxy installation and configuration</p>
 </td><td class="codes"><pre class="brush: clojure">(ns pallet.crate.haproxy
   (:require
    [clojure.set :refer [difference]]
@@ -3121,17 +3121,30 @@ net.brehaut.ClojureTools = (function (SH) {
   (apply str (for [[k v] m] (format-kv k v \newline))))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- config-section
   [[key values]]
-  (if (= :listen key)
+  (if (#{:frontend :backend :listen} key)
     (reduce
      #(str
        %1
        (format
-        &quot;%s %s %s\n%s&quot;
-        (name key) (name (first %2)) (:server-address (second %2))
-        (config-values (dissoc (second %2) :server-address))))
+        &quot;%s %s %s\n%s%s\n&quot;
+        (name key) (name (first %2)) (or (:server-address (second %2)) )
+        (config-values (select-keys (second %2) [:acl]))
+        (config-values (dissoc (second %2) :server-address :acl))))
      values)
-    (format &quot;%s\n%s&quot; (name key) (config-values values))))</pre></td></tr><tr><td class="docs"><p>Format a server configuration line</p>
+    (format &quot;%s\n%s\n&quot; (name key) (config-values values))))</pre></td></tr><tr><td class="docs"><p>Format a server configuration line</p>
 </td><td class="codes"><pre class="brush: clojure">(defn- config-server
+  [{:keys [ip server-port] :as config}]
+  {:pre [(:name config) ip]}
+  (format
+   &quot;%s %s%s %s&quot;
+   (name (:name config))
+   ip
+   (if server-port (str &quot;:&quot; server-port) &quot;&quot;)
+   (apply
+    str
+    (for [[k v] (dissoc config :server-port :ip :name)]
+      (format-kv k v &quot; &quot;)))))</pre></td></tr><tr><td class="docs"><p>Format a backend server configuration line</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- config-backend-server
   [{:keys [ip server-port] :as config}]
   {:pre [(:name config) ip]}
   (format
@@ -3161,7 +3174,9 @@ net.brehaut.ClojureTools = (function (SH) {
    {} (targets)))</pre></td></tr><tr><td class="docs"><p>Build a map for the listen configuration of haproxy</p>
 </td><td class="codes"><pre class="brush: clojure">(defn server-listen
   [group-name listen proxied-config]
-  {:pre [(keyword? group-name) (map? listen) (map? proxied-config)]}
+  {:pre [(keyword? group-name)
+         (or (nil? listen) (map? listen))
+         (map? proxied-config)]}
   (let [apps (map keyword (keys listen))
         listen (zipmap apps (vals listen))
         app-keys (keys proxied-config)
@@ -3173,16 +3188,46 @@ net.brehaut.ClojureTools = (function (SH) {
       (warnf &quot;Configured proxy %s %s with no servers&quot; group-name app))
     (reduce
      (fn [listen [app app-servers]]
-       (update-in listen [app :server]
-                  (fn [servers]
-                    (concat servers (map config-server app-servers)))))
+       (if (get listen app)
+         (update-in listen [app :server]
+                    (fn [servers]
+                      (concat servers (map config-server app-servers))))
+         listen))
      listen
+     proxied-config)))</pre></td></tr><tr><td class="docs"><p>Build a map for the backend configuration of haproxy</p>
+</td><td class="codes"><pre class="brush: clojure">(defn server-backend
+  [group-name backend proxied-config]
+  {:pre [(keyword? group-name)
+         (or (nil? backend) (map? backend))
+         (map? proxied-config)]}
+  (let [apps (map keyword (keys backend))
+        backend (zipmap apps (vals backend))
+        app-keys (keys proxied-config)
+        unconfigured (difference (set app-keys) (set apps))
+        no-nodes (difference (set app-keys) (set apps))]
+    (doseq [app unconfigured]
+      (warnf &quot;Unconfigured proxy %s %s&quot; group-name app))
+    (doseq [app no-nodes]
+      (warnf &quot;Configured proxy %s %s with no servers&quot; group-name app))
+    (reduce
+     (fn [backend [app app-servers]]
+       (if (get backend app)
+         (update-in backend [app :server]
+                    (fn [servers]
+                      (concat servers (map config-server app-servers))))
+         backend))
+     backend
      proxied-config)))</pre></td></tr><tr><td class="docs"><p>Returns a string containing the configuration file contents.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn config-file
   [group-name config]
-  (let [config (update-in
-                config [:listen]
-                #(server-listen group-name % (proxied-map group-name)))]
+  (let [config (-&gt; config
+                   (update-in
+                    [:listen]
+                    #(server-listen group-name % (proxied-map group-name)))
+                   (update-in
+                    [:backend]
+                    #(server-backend
+                      group-name % (proxied-map group-name))))]
     (debugf &quot;proxied-map %s&quot; (proxied-map group-name))
     (debugf &quot;config %s&quot; config)
     (-&gt;&gt;
