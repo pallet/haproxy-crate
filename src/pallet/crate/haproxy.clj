@@ -110,20 +110,35 @@
 
 (defn- config-section
   [[key values]]
-  (if (= :listen key)
+  (if (#{:frontend :backend :listen} key)
     (reduce
      #(str
        %1
        (format
-        "%s %s %s\n%s"
-        (name key) (name (first %2)) (:server-address (second %2))
-        (config-values (dissoc (second %2) :server-address))))
+        "%s %s %s\n%s%s\n"
+        (name key) (name (first %2)) (or (:server-address (second %2)) "")
+        (config-values (select-keys (second %2) [:acl]))
+        (config-values (dissoc (second %2) :server-address :acl))))
      ""
      values)
-    (format "%s\n%s" (name key) (config-values values))))
+    (format "%s\n%s\n" (name key) (config-values values))))
 
 (defn- config-server
   "Format a server configuration line"
+  [{:keys [ip server-port] :as config}]
+  {:pre [(:name config) ip]}
+  (format
+   "%s %s%s %s"
+   (name (:name config))
+   ip
+   (if server-port (str ":" server-port) "")
+   (apply
+    str
+    (for [[k v] (dissoc config :server-port :ip :name)]
+      (format-kv k v " ")))))
+
+(defn- config-backend-server
+  "Format a backend server configuration line"
   [{:keys [ip server-port] :as config}]
   {:pre [(:name config) ip]}
   (format
@@ -157,7 +172,9 @@
 (defn server-listen
   "Build a map for the listen configuration of haproxy"
   [group-name listen proxied-config]
-  {:pre [(keyword? group-name) (map? listen) (map? proxied-config)]}
+  {:pre [(keyword? group-name)
+         (or (nil? listen) (map? listen))
+         (map? proxied-config)]}
   (let [apps (map keyword (keys listen))
         listen (zipmap apps (vals listen))
         app-keys (keys proxied-config)
@@ -169,18 +186,50 @@
       (warnf "Configured proxy %s %s with no servers" group-name app))
     (reduce
      (fn [listen [app app-servers]]
-       (update-in listen [app :server]
-                  (fn [servers]
-                    (concat servers (map config-server app-servers)))))
+       (if (get listen app)
+         (update-in listen [app :server]
+                    (fn [servers]
+                      (concat servers (map config-server app-servers))))
+         listen))
      listen
+     proxied-config)))
+
+(defn server-backend
+  "Build a map for the backend configuration of haproxy"
+  [group-name backend proxied-config]
+  {:pre [(keyword? group-name)
+         (or (nil? backend) (map? backend))
+         (map? proxied-config)]}
+  (let [apps (map keyword (keys backend))
+        backend (zipmap apps (vals backend))
+        app-keys (keys proxied-config)
+        unconfigured (difference (set app-keys) (set apps))
+        no-nodes (difference (set app-keys) (set apps))]
+    (doseq [app unconfigured]
+      (warnf "Unconfigured proxy %s %s" group-name app))
+    (doseq [app no-nodes]
+      (warnf "Configured proxy %s %s with no servers" group-name app))
+    (reduce
+     (fn [backend [app app-servers]]
+       (if (get backend app)
+         (update-in backend [app :server]
+                    (fn [servers]
+                      (concat servers (map config-server app-servers))))
+         backend))
+     backend
      proxied-config)))
 
 (defn config-file
   "Returns a string containing the configuration file contents."
   [group-name config]
-  (let [config (update-in
-                config [:listen]
-                #(server-listen group-name % (proxied-map group-name)))]
+  (let [config (-> config
+                   (update-in
+                    [:listen]
+                    #(server-listen group-name % (proxied-map group-name)))
+                   (update-in
+                    [:backend]
+                    #(server-backend
+                      group-name % (proxied-map group-name))))]
     (debugf "proxied-map %s" (proxied-map group-name))
     (debugf "config %s" config)
     (->>
