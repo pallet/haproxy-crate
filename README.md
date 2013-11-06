@@ -10,7 +10,7 @@ A [pallet](http://palletops.com/) crate to install and configure
 ### Dependency Information
 
 ```clj
-:dependencies [[com.palletops/haproxy-crate "0.8.0-alpha.1"]]
+:dependencies [[com.palletops/haproxy-crate "0.8.0-alpha.2"]]
 ```
 
 ### Releases
@@ -22,11 +22,11 @@ A [pallet](http://palletops.com/) crate to install and configure
 <tbody>
   <tr>
     <th>0.8.0-RC.4</th>
-    <td>0.8.0-alpha.1</td>
+    <td>0.8.0-alpha.2</td>
     <td>clojars</td>
     <td>com.palletops</td>
-    <td><a href='https://github.com/pallet/haproxy-crate/blob/0.8.0-alpha.1/ReleaseNotes.md'>Release Notes</a></td>
-    <td><a href='https://github.com/pallet/haproxy-crate/blob/0.8.0-alpha.1/'>Source</a></td>
+    <td><a href='https://github.com/pallet/haproxy-crate/blob/0.8.0-alpha.2/ReleaseNotes.md'>Release Notes</a></td>
+    <td><a href='https://github.com/pallet/haproxy-crate/blob/0.8.0-alpha.2/'>Source</a></td>
   </tr>
 </tbody>
 </table>
@@ -63,17 +63,31 @@ on port 80.
  :config {:listen {:myapp {:server-address "0.0.0.0:80"}}}}
 ```
 
+The `:frontend` and `:backend` keys can also be used to define an
+application, e.g.
+
+```clj
+{:proxy-group :myproxy
+ :config {:frontend {:myapp {:server-address "0.0.0.0:80"}}
+          :backend {:myapp {}}}}
+```
+
 The `proxied-by` function should be called in the settings phase of
 services that want to be proxied behind haproxy.  The `:proxy-group`
 setting, which defaults to the group-name for the current target,
 should match the `proxy-group-name` argument passed to `proxied-by`.
 
-For example, this would add the current target as a backend for the
+For example, this would add the current target as a server for the
 `:my-app` application, contactable on the 8080 port.
 
 ```clj
 (haproxy/proxied-by :proxy-group :myapp {:server-port 8080})
 ```
+
+When the `:listen` key is used to set up the application, this will
+result in server entries under in the listen configuration section.
+When a `:backend` key is used to set up the application, this will
+result in server entries under the backend configuration section.
 
 The `install` function is responsible for actually installing haproxy.
 

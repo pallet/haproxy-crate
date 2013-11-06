@@ -55,7 +55,7 @@
   (is (= (str
           "listen app1 0.0.0.0:80\n"
           "server tag 1.2.3.4 name tag \n"
-          "balance round-robin\n")
+          "balance round-robin\n\n")
          (#'pallet.crate.haproxy/config-section
           [:listen {:app1 {:server ["tag 1.2.3.4 name tag "]
                            :server-address "0.0.0.0:80"
@@ -63,7 +63,7 @@
   (is (= (str
           "listen app1 0.0.0.0:80\n"
           "server tag 1.2.3.4 name tag \n"
-          "balance round-robin\n")
+          "balance round-robin\n\n")
          (apply str
                 (map
                  #'pallet.crate.haproxy/config-section
@@ -82,7 +82,7 @@
           :phase-context "configure"}
          (remote-file
           "/etc/haproxy/haproxy.cfg"
-          :content "global\ngroup haproxy\nmaxconn 4096\nlog 127.0.0.1 local0\nlog 127.0.0.1 local1 notice\ndaemon\nuser haproxy\ndefaults\nclitimeout 50000\nretries 3\nmaxconn 2000\nlog global\nsrvtimeout 50000\ncontimeout 5000\nmode http\noption httplog\noption dontlognull\noption redispatch\nlisten app 0.0.0.0:80\nserver h1 1.2.3.4:80 weight 1 maxconn 50 check\nserver h2 1.2.3.5:80 weight 1 maxconn 50 check\n"
+          :content "global\ngroup haproxy\nmaxconn 4096\nlog 127.0.0.1 local0\nlog 127.0.0.1 local1 notice\ndaemon\nuser haproxy\n\ndefaults\nclitimeout 50000\nretries 3\nmaxconn 2000\nlog global\nsrvtimeout 50000\ncontimeout 5000\nmode http\noption httplog\noption dontlognull\noption redispatch\n\nlisten app 0.0.0.0:80\nserver h1 1.2.3.4:80 weight 1 maxconn 50 check\nserver h2 1.2.3.5:80 weight 1 maxconn 50 check\n\n"
           :literal true
           :owner "haproxy"
           :group "haproxy"
