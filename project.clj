@@ -1,4 +1,4 @@
-(defproject com.palletops/haproxy-crate "0.8.0-SNAPSHOT"
+(defproject com.palletops/haproxy-crate "0.8.0-alpha.2"
   :description "Crate for haproxy installation"
   :url "http://github.com/pallet/haproxy-crate"
   :license {:name "Eclipse Public License"

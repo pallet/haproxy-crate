@@ -1,6 +1,10 @@
 # Release notes
 
-## haproxy-0.8.0-alpha.1
+## 0.8.0-alpha.2
+
+- Fix use of frontend and backend configuration
+
+## 0.8.0-alpha.1
 
 - Update for pallet 0.8.0-RC.4
 
