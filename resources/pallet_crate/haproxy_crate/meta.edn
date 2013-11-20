@@ -8,4 +8,4 @@
  :tag-prefix ""
  :artifact-id "haproxy-crate"
  :source-path "src/pallet/crate/haproxy.clj"
- :versions [{:pallet "0.8.0-RC.4" :version "0.8.0-alpha.2"}]}
+ :versions [{:pallet "0.8.0-RC.4" :version "0.8.0-alpha.3"}]}
