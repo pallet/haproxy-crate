@@ -2,6 +2,13 @@
 
 ## 0.8.0-alpha.2
 
+- Change ensure-service to use reload
+  To ensure the service is up and running with the latest configuration,
+  ensure-service now starts the service if stopped, and reloads the service
+  if the configuration has changed.
+
+## 0.8.0-alpha.2
+
 - Fix use of frontend and backend configuration
 
 ## 0.8.0-alpha.1
