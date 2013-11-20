@@ -288,9 +288,14 @@
                                      (dissoc options :instance-id)))))
 
 (defplan ensure-service
+  "Ensure the service is running and has read the latest configuration."
   [& {:keys [instance-id] :as options}]
-  (service :instance-id instance-id :if-flag config-changed-flag)
-  (service :instance-id instance-id :if-stopped true))
+  (service :instance-id instance-id
+           :if-stopped true
+           :action :start)
+  (service :instance-id instance-id
+           :if-flag config-changed-flag
+           :action :reload))
 
 (defn server-spec
   [{:keys [instance-id] :as settings}]
@@ -302,7 +307,8 @@
                :install (plan-fn (install options))
                :configure (plan-fn (configure options))
                :ensure-service (plan-fn (apply-map ensure-service options))}
-              (service-phases facility options service))
+              (service-phases facility options service
+                              :actions [:start :stop :reload :restart]))
      :default-phases [:install :configure :ensure-service]
      :roles (when-let [proxy-group (:proxy-group settings)]
               #{proxy-group}))))
