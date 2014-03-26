@@ -308,7 +308,8 @@
                :configure (plan-fn (configure options))
                :ensure-service (plan-fn (apply-map ensure-service options))}
               (service-phases facility options service
-                              :actions [:start :stop :reload :restart]))
+                              :actions [:start :stop :reload :restart :enable
+                                        :disable]))
      :default-phases [:install :configure :ensure-service]
      :roles (when-let [proxy-group (:proxy-group settings)]
               #{proxy-group}))))
